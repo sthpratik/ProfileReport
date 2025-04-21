@@ -81,19 +81,19 @@ def get_profile_report(df,minimal):
 def main():
     # Sidebar
     minimal = False
-    with st.sidebar:
-        # Initialize session state variables if not already set
-        if "uploaded_file" not in st.session_state:
-            st.session_state.uploaded_file = None
-        if "dataframe" not in st.session_state:
-            st.session_state.dataframe = None
+    if "uploaded_file" not in st.session_state:
+        st.session_state.uploaded_file = None
+    if "dataframe" not in st.session_state:
+        st.session_state.dataframe = None
 
-        # File uploader
-        uploaded_file = st.file_uploader("Upload .csv, .xlsx files not exceeding 10 MB", key="file_uploader")
-        if uploaded_file is not None:
-            st.session_state.uploaded_file = uploaded_file  # Cache the uploaded file
-            st.write('Modes of Operation')
-            minimal = st.checkbox('Do you want minimal report ?', key="minimal_checkbox")
+    if st.session_state.uploaded_file is None:
+        with st.sidebar:
+            # File uploader
+            uploaded_file = st.file_uploader("Upload .csv, .xlsx files not exceeding 10 MB", key="file_uploader")
+            if uploaded_file is not None:
+                st.session_state.uploaded_file = uploaded_file  # Cache the uploaded file
+                st.write('Modes of Operation')
+                minimal = st.checkbox('Do you want minimal report ?', key="minimal_checkbox")
 
     # Use the cached file from session state
     if st.session_state.uploaded_file is not None:
@@ -109,7 +109,8 @@ def main():
             tab1, tab2 = st.tabs(["DataFrame", "Report"])
             with tab1:
                 st.header("DataFrame")
-                st.write(df, use_container_width=True)
+                df.height = 2000
+                st.write(df)
             with tab2:
                 profile_file = "report.html"
                 # Remove the navbar from the HTML
