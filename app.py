@@ -45,6 +45,7 @@ def remove_navbar_from_html(html_content):
     # Return the modified HTML as a string
     return str(soup)
 
+@st.cache_resource
 def get_dataframe(uploaded_file):
     df = None
     if uploaded_file is not None:
@@ -78,31 +79,45 @@ def get_profile_report(df,minimal):
 
 
 def main():
-    # sidebar
+    # Sidebar
     minimal = False
     with st.sidebar:
-        uploaded_file = st.file_uploader("Upload .csv, .xlsx files not exceeding 10 MB")
-        if uploaded_file is not None:
-            st.write('Modes of Operation')
-            minimal = st.checkbox('Do you want minimal report ?')     
+        # Initialize session state variables if not already set
+        if "uploaded_file" not in st.session_state:
+            st.session_state.uploaded_file = None
+        if "dataframe" not in st.session_state:
+            st.session_state.dataframe = None
 
-    df = get_dataframe(uploaded_file)    
-    if df is not None:
-        # generate report
-        with st.spinner('Generating Report'):
-            profile = get_profile_report(df,minimal)
-            
-        tab1, tab2 = st.tabs(["DataFrame", "Report"])
-        with tab1:
-            st.header("DataFrame")
-            st.write(df, use_container_width=True)
-        with tab2:
-            profile_file = "report.html"
-            # Save the profile report to an HTML file
-            # save_file(profile_file, profile.html)
-            # Remove the navbar from the HTML
-            modified_html = remove_navbar_from_html(profile.html)
-            components.html(modified_html, height=2000, scrolling=True)
+        # File uploader
+        uploaded_file = st.file_uploader("Upload .csv, .xlsx files not exceeding 10 MB", key="file_uploader")
+        if uploaded_file is not None:
+            st.session_state.uploaded_file = uploaded_file  # Cache the uploaded file
+            st.write('Modes of Operation')
+            minimal = st.checkbox('Do you want minimal report ?', key="minimal_checkbox")
+
+    # Use the cached file from session state
+    if st.session_state.uploaded_file is not None:
+        if st.session_state.dataframe is None:  # Load the DataFrame only if not already cached
+            st.session_state.dataframe = get_dataframe(st.session_state.uploaded_file)
+
+        df = st.session_state.dataframe
+        if df is not None:
+            # Generate report
+            with st.spinner('Generating Report'):
+                profile = get_profile_report(df, minimal)
+
+            tab1, tab2 = st.tabs(["DataFrame", "Report"])
+            with tab1:
+                st.header("DataFrame")
+                st.write(df, use_container_width=True)
+            with tab2:
+                profile_file = "report.html"
+                # Remove the navbar from the HTML
+                modified_html = remove_navbar_from_html(profile.html)
+                components.html(modified_html, height=2000, scrolling=True)
+    else:
+        st.title('Data Profiler')
+        st.info('Upload your data in the left sidebar to generate profiling')
 
 
 if __name__ == "__main__":
