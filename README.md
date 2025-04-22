@@ -2,6 +2,8 @@
 
 ProfileReport is a data analytics tool built using **Streamlit** that allows users to generate detailed profiling reports for their datasets. It supports `.csv` and `.xlsx` file formats and provides an interactive interface for exploring data insights.
 
+[Demo Link](https://softechpro.streamlit.app/)
+---
 ![Home Page](./docs/home.png)
 
 ---
