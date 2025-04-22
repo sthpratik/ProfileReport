@@ -7,3 +7,4 @@ ydata-profiling
 openpyxl
 xlrd
 bs4
+setuptools
