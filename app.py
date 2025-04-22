@@ -6,6 +6,8 @@ import sys
 import os
 import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title='Data Profiler',layout='wide')
 
@@ -77,6 +79,58 @@ def get_profile_report(df,minimal):
     return profile
 
 
+def sns_pair_plot(df):
+    fig, ax = plt.subplots(figsize=(20, 10))  # Adjust the size (width=5, height=3)
+    # Create a Seaborn pairplot
+    plot = sns.pairplot(df)
+    # Display the plot in Streamlit
+    st.pyplot(plot.figure)
+
+def sns_heatmap(df):
+    fig, ax = plt.subplots(figsize=(20, 10))  # Adjust the size (width=5, height=3)
+    # Create a Seaborn correlation plot
+    plot = sns.heatmap(df.corr(), annot=True,  cmap='coolwarm', fmt='.2f')
+    # Display the plot in Streamlit
+    st.pyplot(fig)
+
+
+
+
+def sns_scatter_plot(df):
+    # create columns for the scatter plot
+    col1, col2 = st.columns([0.25, 0.75])
+    with col1:
+        st.subheader('Seaborn Plot')
+        st.write('Select the columns for the scatter plot')
+        #create a selectbox for selecting the columns
+        x_axis = st.selectbox('Select X-axis', df.columns)
+        y_axis = st.selectbox('Select Y-axis', df.columns)
+        #Create a selectbox for selecting the plot type
+        plot_type = st.selectbox('Select Plot Type', ['scatterplot','kdeplot','histplot',
+                                                      'displot','lmplot','barplot','pointplot','catplot'])
+                # Define a mapping of plot types to Seaborn functions
+        plot_functions = {
+            'scatterplot': sns.scatterplot,
+            'displot': sns.displot,
+            'lmplot': sns.lmplot,
+            'barplot': sns.barplot,
+            'kdeplot': sns.kdeplot,
+            'histplot': sns.histplot,
+            'barplot': sns.barplot,
+            'pointplot': sns.pointplot,
+            'catplot': sns.catplot
+        }
+    with col2:
+        try:
+            st.write('Select the columns for the plot')
+            fig, ax = plt.subplots(figsize=(20, 10))  # Adjust the size (width=5, height=3)
+            # Get the selected plot function
+            plot_func = plot_functions.get(plot_type)
+            plot_func(data=df, x=x_axis, y=y_axis)
+            # Display the plot in Streamlit
+            st.pyplot(fig)
+        except Exception as e:
+            st.error(f"Data not supported for the selected plot type: {e}")
 
 def main():
     # Sidebar
@@ -111,8 +165,12 @@ def main():
                 st.header("DataFrame")
                 df.height = 2000
                 st.write(df)
+                #sns_heatmap(df)
+                # sns_pair_plot(df)
+                sns_scatter_plot(df=df)
             with tab2:
                 profile_file = "report.html"
+                save_file(profile_file, profile.html)
                 # Remove the navbar from the HTML
                 modified_html = remove_navbar_from_html(profile.html)
                 components.html(modified_html, height=2000, scrolling=True)
