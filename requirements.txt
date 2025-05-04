@@ -8,3 +8,5 @@ openpyxl
 xlrd
 bs4
 setuptools
+smolagents
+litellm

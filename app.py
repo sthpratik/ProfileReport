@@ -26,7 +26,7 @@ def validate_file(file):
         return False
 
 @st.cache_resource    
-def save_file(file_name, data):
+async def save_file(file_name, data):
     with open(file_name, 'w') as f:
         f.write(data)
     return file_name
@@ -54,7 +54,7 @@ def get_dataframe(uploaded_file):
         ext = validate_file(uploaded_file)
         if ext:
             filesize = get_filesize(uploaded_file)
-            if filesize <= 10:
+            if filesize <= 100:
                 if ext == '.csv':
                     # time being let load csv
                     df = pd.read_csv(uploaded_file)
@@ -64,7 +64,7 @@ def get_dataframe(uploaded_file):
                     sheet_name = st.sidebar.selectbox('Select the sheet',sheet_tuple)
                     df = xl_file.parse(sheet_name)
             else:
-                st.error(f'Maximum allowed filesize is 10 MB. But received {filesize} MB')    
+                st.error(f'Maximum allowed filesize is 100 MB. But received {filesize} MB')    
         else:
             st.error('Kindly upload only .csv or .xlsx file')     
     else:
@@ -78,24 +78,81 @@ def get_profile_report(df,minimal):
     profile = ProfileReport(df, title="Profiling Report",minimal=minimal, explorative=True)
     return profile
 
-
-def sns_pair_plot(df):
-    fig, ax = plt.subplots(figsize=(20, 10))  # Adjust the size (width=5, height=3)
-    # Create a Seaborn pairplot
-    plot = sns.pairplot(df)
-    # Display the plot in Streamlit
-    st.pyplot(plot.figure)
-
+@st.cache_resource  
 def sns_heatmap(df):
-    fig, ax = plt.subplots(figsize=(20, 10))  # Adjust the size (width=5, height=3)
-    # Create a Seaborn correlation plot
-    plot = sns.heatmap(df.corr(), annot=True,  cmap='coolwarm', fmt='.2f')
-    # Display the plot in Streamlit
-    st.pyplot(fig)
+    try:
+        fig, ax = plt.subplots(figsize=(20, 10))  # Adjust the size (width=5, height=3)
+        # Create a Seaborn correlation plot
+        plot = sns.heatmap(df.select_dtypes(include=['number']).corr(), annot=True,  cmap='coolwarm', fmt='.2f')
+        # Display the plot in Streamlit
+        st.pyplot(fig)
+    except Exception as e:
+        st.error(f"Data not supported for the selected plot type: {e}")
+
+@st.cache_resource  
+def pair_plot(df):
+    try:
+        # Create a pair plot
+        fig, ax = plt.subplots(figsize=(20, 10))  # Adjust the size (width=5, height=3)
+        # Create a Seaborn pairplot
+        plot = sns.pairplot(df)
+        # Display the plot in Streamlit
+        st.pyplot(plot.figure)
+    except Exception as e:
+        st.error(f"Data not supported for the selected plot type: {e}")
 
 
+@st.cache_resource  
+def df_stats(df):
+    #write function to show the stats of the dataframe like mean, median, mode, std, var, skew, kurtosis
+    st.subheader('Statistics')
+    st.write(df.describe())
 
 
+@st.cache_resource  
+def value_count_plot(df):
+    st.subheader('Value Count')
+    st.write('Select the column and plot type for the value count')
+
+        # create columns for the scatter plot
+    col1, col2 = st.columns([0.25, 0.75])
+
+    with col1:
+        # Create a selectbox for selecting the column
+        column = st.selectbox('Select Column', df.columns, key="value_count_selectbox")
+            
+
+        # Create a selectbox for selecting the plot type
+        plot_type = st.selectbox(
+            'Select Plot Type',
+            ['line', 'bar', 'barh', 'hist', 'box', 'kde', 'density', 'area', 'pie', 'scatter', 'hexbin'],
+            key="value_count_plot_type_selectbox"
+        )
+
+        st.write(df[column].describe())
+
+    with col2:
+        if column:
+            try:
+                # Generate the value counts for the selected column
+                value_counts = df[column].value_counts()
+
+                # Plot based on the selected plot type
+                if plot_type == 'pie':
+                    # Special handling for pie plot
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    value_counts.plot.pie(autopct='%1.1f%%', ax=ax)
+                    ax.set_ylabel('')  # Remove y-axis label for pie chart
+                    st.pyplot(fig)
+                else:
+                    # General plotting for other types
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    value_counts.plot(kind=plot_type, ax=ax)
+                    st.pyplot(fig)
+            except Exception as e:
+                st.error(f"Error generating the plot: {e}")
+
+@st.cache_resource  
 def sns_scatter_plot(df):
     # create columns for the scatter plot
     col1, col2 = st.columns([0.25, 0.75])
@@ -103,11 +160,11 @@ def sns_scatter_plot(df):
         st.subheader('Seaborn Plot')
         st.write('Select the columns for the scatter plot')
         #create a selectbox for selecting the columns
-        x_axis = st.selectbox('Select X-axis', df.columns)
-        y_axis = st.selectbox('Select Y-axis', df.columns)
+        x_axis = st.selectbox('Select X-axis', df.columns, key="sns_x_axis_selectbox")
+        y_axis = st.selectbox('Select Y-axis', df.columns, key="sns_y_axis_selectbox")
         #Create a selectbox for selecting the plot type
         plot_type = st.selectbox('Select Plot Type', ['scatterplot','kdeplot','histplot',
-                                                      'displot','lmplot','barplot','pointplot','catplot'])
+                                                      'displot','lmplot','barplot','pointplot','catplot'], key="sns_plot_type_selectbox")
                 # Define a mapping of plot types to Seaborn functions
         plot_functions = {
             'scatterplot': sns.scatterplot,
@@ -158,22 +215,30 @@ def main():
         if df is not None:
             # Generate report
             with st.spinner('Generating Report'):
-                profile = get_profile_report(df, minimal)
-
+                profile =  get_profile_report(df, minimal)
             tab1, tab2 = st.tabs(["DataFrame", "Report"])
             with tab1:
                 st.header("DataFrame")
                 df.height = 2000
                 st.write(df)
-                #sns_heatmap(df)
-                # sns_pair_plot(df)
-                sns_scatter_plot(df=df)
+                stats_tab, valuepoint_tab,heatmap_tab, pairplot_tab, seabornplot = st.tabs(["Statistics","Valuepoint","Heatmap", "Pairplot", "Column Distribution"])
+                with heatmap_tab:
+                    sns_heatmap(df)
+                with pairplot_tab:
+                    pair_plot(df)
+                with stats_tab:
+                    df_stats(df)
+                with valuepoint_tab:
+                    value_count_plot(df=df)
+                with seabornplot:
+                    sns_scatter_plot(df=df)
             with tab2:
                 profile_file = "report.html"
-                save_file(profile_file, profile.html)
+                #save_file(profile_file, profile.html)
                 # Remove the navbar from the HTML
                 modified_html = remove_navbar_from_html(profile.html)
                 components.html(modified_html, height=2000, scrolling=True)
+    
     else:
         st.title('Data Profiler')
         st.info('Upload your data in the left sidebar to generate profiling')
