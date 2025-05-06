@@ -8,6 +8,7 @@ import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
 import seaborn as sns
 import matplotlib.pyplot as plt
+import threading
 
 st.set_page_config(page_title='Data Profiler',layout='wide')
 
@@ -108,64 +109,52 @@ def df_stats(df):
     st.subheader('Statistics')
     st.write(df.describe())
 
+@st.cache_resource
+def generate_value_count_plot(df, column, plot_type):
+    try:
+        # Check the data type of the selected column
+        if pd.api.types.is_numeric_dtype(df[column]):
+            # For numeric columns, proceed with value counts
+            value_counts = df[column].value_counts()
+        else:
+            # For non-numeric columns, convert to string and count values
+            value_counts = df[column].astype(str).value_counts()
 
-@st.cache_resource  
+        # Plot based on the selected plot type
+        fig, ax = plt.subplots(figsize=(10, 6))
+        if plot_type == 'pie':
+            value_counts.plot.pie(autopct='%1.1f%%', ax=ax)
+            ax.set_ylabel('')  # Remove y-axis label for pie chart
+        else:
+            value_counts.plot(kind=plot_type, ax=ax)
+        return fig
+    except Exception as e:
+        st.error(f"Error generating the plot: {e}")
+        return None
+
 def value_count_plot(df):
     st.subheader('Value Count')
     st.write('Select the column and plot type for the value count')
 
-        # create columns for the scatter plot
     col1, col2 = st.columns([0.25, 0.75])
-
     with col1:
-        # Create a selectbox for selecting the column
         column = st.selectbox('Select Column', df.columns, key="value_count_selectbox")
-            
-
-        # Create a selectbox for selecting the plot type
         plot_type = st.selectbox(
             'Select Plot Type',
             ['line', 'bar', 'barh', 'hist', 'box', 'kde', 'density', 'area', 'pie', 'scatter', 'hexbin'],
             key="value_count_plot_type_selectbox"
         )
 
-        st.write(df[column].describe())
-
     with col2:
-        if column:
-            try:
-                # Generate the value counts for the selected column
-                value_counts = df[column].value_counts()
+        if column and plot_type:
+            fig = generate_value_count_plot(df, column, plot_type)
+            if fig:
+                st.pyplot(fig)
 
-                # Plot based on the selected plot type
-                if plot_type == 'pie':
-                    # Special handling for pie plot
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    value_counts.plot.pie(autopct='%1.1f%%', ax=ax)
-                    ax.set_ylabel('')  # Remove y-axis label for pie chart
-                    st.pyplot(fig)
-                else:
-                    # General plotting for other types
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    value_counts.plot(kind=plot_type, ax=ax)
-                    st.pyplot(fig)
-            except Exception as e:
-                st.error(f"Error generating the plot: {e}")
-
-@st.cache_resource  
-def sns_scatter_plot(df):
-    # create columns for the scatter plot
-    col1, col2 = st.columns([0.25, 0.75])
-    with col1:
-        st.subheader('Seaborn Plot')
-        st.write('Select the columns for the scatter plot')
-        #create a selectbox for selecting the columns
-        x_axis = st.selectbox('Select X-axis', df.columns, key="sns_x_axis_selectbox")
-        y_axis = st.selectbox('Select Y-axis', df.columns, key="sns_y_axis_selectbox")
-        #Create a selectbox for selecting the plot type
-        plot_type = st.selectbox('Select Plot Type', ['scatterplot','kdeplot','histplot',
-                                                      'displot','lmplot','barplot','pointplot','catplot'], key="sns_plot_type_selectbox")
-                # Define a mapping of plot types to Seaborn functions
+@st.cache_resource
+def generate_sns_scatter_plot(df, x_axis, y_axis, plot_type):
+    try:
+        fig, ax = plt.subplots(figsize=(20, 10))
         plot_functions = {
             'scatterplot': sns.scatterplot,
             'displot': sns.displot,
@@ -173,21 +162,64 @@ def sns_scatter_plot(df):
             'barplot': sns.barplot,
             'kdeplot': sns.kdeplot,
             'histplot': sns.histplot,
-            'barplot': sns.barplot,
             'pointplot': sns.pointplot,
             'catplot': sns.catplot
         }
+        plot_func = plot_functions.get(plot_type)
+        plot_func(data=df, x=x_axis, y=y_axis, ax=ax)
+        return fig
+    except Exception as e:
+        st.error(f"Error generating the plot: {e}")
+        return None
+
+def sns_scatter_plot(df):
+    st.subheader('Seaborn Plot')
+    st.write('Select the columns and plot type for the scatter plot')
+
+    col1, col2 = st.columns([0.25, 0.75])
+    with col1:
+        x_axis = st.selectbox('Select X-axis', df.columns, key="sns_x_axis_selectbox")
+        y_axis = st.selectbox('Select Y-axis', df.columns, key="sns_y_axis_selectbox")
+        plot_type = st.selectbox(
+            'Select Plot Type',
+            ['scatterplot', 'kdeplot', 'histplot', 'displot', 'lmplot', 'barplot', 'pointplot', 'catplot'],
+            key="sns_plot_type_selectbox"
+        )
+
     with col2:
-        try:
-            st.write('Select the columns for the plot')
-            fig, ax = plt.subplots(figsize=(20, 10))  # Adjust the size (width=5, height=3)
-            # Get the selected plot function
-            plot_func = plot_functions.get(plot_type)
-            plot_func(data=df, x=x_axis, y=y_axis)
-            # Display the plot in Streamlit
-            st.pyplot(fig)
-        except Exception as e:
-            st.error(f"Data not supported for the selected plot type: {e}")
+        if x_axis and y_axis and plot_type:
+            fig = generate_sns_scatter_plot(df, x_axis, y_axis, plot_type)
+            if fig:
+                st.pyplot(fig)
+
+# Optimize other parts of the code using threading
+def threaded_function(target, args):
+    thread = threading.Thread(target=target, args=args)
+    thread.start()
+    thread.join()
+
+
+# Precompute plots using threads
+def precompute_plots(df):
+    results = {}
+
+    def compute_plot(name, func, *args):
+        results[name] = func(*args)
+
+    threads = [
+        threading.Thread(target=compute_plot, args=("heatmap", sns_heatmap, df)),
+        threading.Thread(target=compute_plot, args=("pairplot", pair_plot, df)),
+        threading.Thread(target=compute_plot, args=("stats", df_stats, df)),
+        threading.Thread(target=compute_plot, args=("value_count", value_count_plot, df)),
+        threading.Thread(target=compute_plot, args=("seaborn", sns_scatter_plot, df)),
+    ]
+
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    return results
 
 def main():
     # Sidebar
@@ -213,32 +245,35 @@ def main():
 
         df = st.session_state.dataframe
         if df is not None:
-            # Generate report
-            with st.spinner('Generating Report'):
-                profile =  get_profile_report(df, minimal)
+
+
             tab1, tab2 = st.tabs(["DataFrame", "Report"])
             with tab1:
                 st.header("DataFrame")
-                df.height = 2000
                 st.write(df)
-                stats_tab, valuepoint_tab,heatmap_tab, pairplot_tab, seabornplot = st.tabs(["Statistics","Valuepoint","Heatmap", "Pairplot", "Column Distribution"])
-                with heatmap_tab:
-                    sns_heatmap(df)
-                with pairplot_tab:
-                    pair_plot(df)
+                stats_tab, valuepoint_tab, heatmap_tab, pairplot_tab, seabornplot = st.tabs(
+                    ["Statistics", "Valuepoint", "Heatmap", "Pairplot", "Column Distribution"]
+                )
+
+                # Render plots directly in their respective tabs
                 with stats_tab:
                     df_stats(df)
                 with valuepoint_tab:
                     value_count_plot(df=df)
+                with heatmap_tab:
+                    sns_heatmap(df)
+                with pairplot_tab:
+                    pair_plot(df)
                 with seabornplot:
                     sns_scatter_plot(df=df)
             with tab2:
-                profile_file = "report.html"
-                #save_file(profile_file, profile.html)
-                # Remove the navbar from the HTML
-                modified_html = remove_navbar_from_html(profile.html)
-                components.html(modified_html, height=2000, scrolling=True)
-    
+                # Generate report
+                with st.spinner('Generating Report'):
+                    profile = get_profile_report(df,minimal)
+                    profile_file = "report.html"
+                    # Remove the navbar from the HTML
+                    modified_html = remove_navbar_from_html(profile.html)
+                    components.html(modified_html, height=2000, scrolling=True)
     else:
         st.title('Data Profiler')
         st.info('Upload your data in the left sidebar to generate profiling')
